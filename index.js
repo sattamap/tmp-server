@@ -14,7 +14,7 @@ app.use(express.json());
 
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cppr05o.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -32,6 +32,7 @@ async function run() {
     await client.connect();
 
     const userCollection = client.db("tmp").collection("users");
+    const taskCollection = client.db("tmp").collection("tasks");
 
     
     app.post('/users', async (req, res) => {
@@ -46,12 +47,61 @@ async function run() {
         const result = await userCollection.insertOne(user);
         res.send(result);
       });
+
+
+
+      // task related API
+
+      app.get('/tasks', async (req, res) => {
+        const tasks = await taskCollection.find().toArray();
+        res.json(tasks);
+      })
+
+      app.post('/tasks', async (req, res) => {
+        const item = req.body;
+        const result = await taskCollection.insertOne(item);
+        res.send(result);
+      });
+
+      app.put('/tasks/:id', async (req, res) => {
+        const taskId = req.params.id;
+        console.log("task id:",taskId);
+        const updatedFields = { ...req.body }; // Copy the object to avoid modifying the original
+        delete updatedFields._id; // Exclude the _id field from the update operation
+      
+        try {
+          const result = await taskCollection.updateOne(
+            { _id: new ObjectId(taskId) },
+            { $set: updatedFields }
+          );
+      
+          if (result.modifiedCount === 1) {
+            const updatedTask = await taskCollection.findOne({ _id: new ObjectId(taskId) });
+            res.json({ updatedTask });
+          } else {
+            res.status(404).json({ error: 'Task not found' });
+          }
+        } catch (error) {
+          console.error('Error updating task:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+        }
+      });
+      
+      
+
+
+      app.delete('/tasks/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) }
+        const result = await taskCollection.deleteOne(query);
+        res.send(result);
+      })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
-    await client.close();
+    // await client.close();
   }
 }
 run().catch(console.dir);
